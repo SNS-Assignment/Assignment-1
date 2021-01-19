@@ -85,7 +85,7 @@ def enterCommand():
         serverSocket.send(str.encode(cmd))
         data = (serverSocket.recv(PIECE_SIZE))
         text = data.decode('utf-8')
-        print(f'Server response {text}')
+        print(f'Server response: {text}')
 
 
 def acceptMessage(conn, addr):

@@ -132,7 +132,8 @@ def sendToUser(params, loginId):
     client = connectedClients[params[1]]
     try:
         s.connect((client.ip, client.port))
-        s.send(str.encode(f'{loginId} said {params[3]}'))
+        t = ' '.join(params[3:])
+        s.send(str.encode(f'{loginId} said {t}'))
         msg = f'Message sent to user {params[1]}'
         s.close()
     except Exception as e:
