@@ -7,7 +7,6 @@ class User:
 
 
 class Client:
-
     def __init__(self, userid: str, ip: str, port: int):
         self.userid = id
         self.ip = ip
@@ -15,9 +14,10 @@ class Client:
 
 
 class Group:
-    def __init__(self, name):
+    def __init__(self, name, nonce=None):
         self.name = name
         self.members = []
+        self.nonce = ('' if nonce is None else nonce)
 
     def addMember(self, member: str):
         self.members.append(member)

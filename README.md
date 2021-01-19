@@ -1,4 +1,4 @@
-# Whatsapp-like End to End messaging system
+# End to End messaging system
 
 ## Command list
 
@@ -7,6 +7,6 @@
 - `join <groupname>`
 - `create <groupname>`
 - `senduser <username> <text/file> <text block/file data>`
-- `sendgroup <groupname> <text/file> <text block/file data>`
+- `sendgrp <groupname> <text/file> <text block/file data>`
 - `list`
 - `quit`

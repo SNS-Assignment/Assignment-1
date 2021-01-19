@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
+import mimetypes
 import os
 import socket
-import mimetypes
 import sys
 from _thread import *
 
@@ -38,7 +38,7 @@ def connectServer():
 
 def enterCommand():
     while True:
-        cmd = input('Enter command ')
+        cmd = input()
         cmd = cmd.lower()
         cmdList = cmd.split(' ')
         sendCommand = ''
@@ -66,6 +66,13 @@ def enterCommand():
                 continue
         # senduser <user_name> <text/file> <text body/file path>
         elif cmdList[0] == 'senduser':
+            if len(cmdList) < 4:
+                print('Too few parameters')
+                continue
+            if cmdList[2] != 'text' and cmdList[2] != 'file':
+                print('Incorrect format: '+cmdList[2])
+                continue
+        elif cmdList[0] == 'sendgrp':
             if len(cmdList) < 4:
                 print('Too few parameters')
                 continue
