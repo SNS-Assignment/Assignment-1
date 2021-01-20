@@ -13,6 +13,7 @@ serverSocket: socket
 IS_LOGGED_IN = False
 LOGIN_ID = ''
 isActive = True
+params = list()
 
 
 def startListen():
@@ -43,6 +44,7 @@ def enterCommand():
         cmdList = cmd.split(' ')
         sendCommand = ''
         if cmdList[0] == 'quit':
+            global isActive
             isActive = False
             # listenSocket.close()
             serverSocket.send(str.encode(cmd))
@@ -89,10 +91,49 @@ def enterCommand():
 
 
 def acceptMessage(conn, addr):
-    data = (conn.recv(PIECE_SIZE))
-    text = data.decode('utf-8')
-    print(text)
-
+    # global rep
+    # print(rep)
+    # if rep == False:
+    #     data = conn.recv(PIECE_SIZE)
+    #     conn.close()
+    #     data = data.decode()
+    #     print(data)
+    #     data = eval(data)
+    #     global params
+    #     params = data.copy()
+    #    # params = eval(params)
+    #     print(type(params))
+    #     rep = True
+    # print(params) 
+    data = conn.recv(80).decode()
+    print(data)
+    data = data.split('del1')
+    params = eval(data[0])   
+    print(params[2])
+    if params[2] == 'text':
+        print(sys.getsizeof(params))
+        #text = params[3]
+        #data = conn.recv(PIECE_SIZE)
+        text = data[1]
+        data = conn.recv(PIECE_SIZE)
+        text += data.decode()
+        while data > bytes(1):
+            data = conn.recv(PIECE_SIZE)
+            text += data.decode()
+        print(text)
+    elif params[2] == 'file':
+        filename = params[3].split('/')
+        filename = filename[-1]
+        text = data[1]
+        print(text)
+        f = open(filename,'wb+')
+        data = conn.recv(PIECE_SIZE)
+        f.write(data)
+        while data > bytes(1):
+            data = conn.recv(PIECE_SIZE)
+            f.write(data)
+        f.close()
+        #conn.close()    
 
 def main():
     if len(sys.argv) < 2:
