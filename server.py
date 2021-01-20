@@ -128,18 +128,50 @@ def acceptMessage(conn, addr):
 
 
 def sendToUser(params, loginId):
+
     s = socket.socket()
     client = connectedClients[params[1]]
-    try:
-        s.connect((client.ip, client.port))
-        t = ' '.join(params[3:])
-        s.send(str.encode(f'{loginId} said {t}'))
-        msg = f'Message sent to user {params[1]}'
-        s.close()
-    except Exception as e:
-        print('Exception occured:', str(e))
-        msg = f'Failed to send message to user {params[1]}'
-    return msg
+    s.connect((client.ip, client.port))
+    y = str(params)
+    y = y + 'del1'
+    y = y.encode()
+    s.send(y)
+    if params[2] == 'text':
+        try:
+            #s.close()
+            t = ' '.join(params[3:])
+            s.sendall(str.encode(f'{loginId} sent {t}'))
+            msg = f'Message sent to user {params[1]}'
+        except Exception as e:
+            print('Exception occured:', str(e))
+            msg = f'Failed to send message to user {params[1]}'  
+        return msg
+    elif params[2] == 'file':
+        filename = params[3].split('/')
+        filename = filename[-1]
+        s.sendall(str.encode(f'{loginId} sent {filename}'))
+        try:
+            f = open(params[3],'rb')
+            t = f.read()
+            s.sendall(t)
+            msg = f'Message sent to user {params[1]}'
+        except Exception as e:
+            print('Exception occured:', str(e))
+            msg = f'Failed to send message to user {params[1]}'  
+        return msg    
+
+    
+    # try:
+    #     #s = socket.socket()
+    #     s.connect((client.ip, client.port))
+    #     t = ' '.join(params[3:])
+    #     s.send(str.encode(f'{loginId} said {t}'))
+    #     msg = f'Message sent to user {params[1]}'
+    #     s.close()
+    # except Exception as e:
+    #     print('Exception occured:', str(e))
+    #     msg = f'Failed to send message to user {params[1]}'
+    # return msg
 
 
 def main():
