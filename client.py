@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import mimetypes
+import datetime
 import os
 import socket
 import sys
@@ -91,49 +91,27 @@ def enterCommand():
 
 
 def acceptMessage(conn, addr):
-    # global rep
-    # print(rep)
-    # if rep == False:
-    #     data = conn.recv(PIECE_SIZE)
-    #     conn.close()
-    #     data = data.decode()
-    #     print(data)
-    #     data = eval(data)
-    #     global params
-    #     params = data.copy()
-    #    # params = eval(params)
-    #     print(type(params))
-    #     rep = True
-    # print(params) 
-    data = conn.recv(80).decode()
-    print(data)
-    data = data.split('del1')
-    params = eval(data[0])   
-    print(params[2])
-    if params[2] == 'text':
-        print(sys.getsizeof(params))
-        #text = params[3]
-        #data = conn.recv(PIECE_SIZE)
-        text = data[1]
+    data = conn.recv(PIECE_SIZE)
+    text = data.decode('utf-8')
+    conn.send(str.encode('OK'))  # sync mechanism
+    if text == 'text':
         data = conn.recv(PIECE_SIZE)
-        text += data.decode()
-        while data > bytes(1):
+        print(data.decode('utf-8'))
+    else:
+        text = text.split(' ')
+        fName = text[2]
+        f = open(f'{datetime.datetime.now().time()}-{fName}', 'wb')
+        while True:
             data = conn.recv(PIECE_SIZE)
-            text += data.decode()
-        print(text)
-    elif params[2] == 'file':
-        filename = params[3].split('/')
-        filename = filename[-1]
-        text = data[1]
-        print(text)
-        f = open(filename,'wb+')
-        data = conn.recv(PIECE_SIZE)
-        f.write(data)
-        while data > bytes(1):
-            data = conn.recv(PIECE_SIZE)
-            f.write(data)
-        f.close()
-        #conn.close()    
+            while len(data) != 0:
+                f.write(data)
+                if len(data) < PIECE_SIZE:
+                    break
+                data = conn.recv(PIECE_SIZE)
+            f.close()
+            break
+        print(f'{text[1]} sent file {fName}')
+
 
 def main():
     if len(sys.argv) < 2:
