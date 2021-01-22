@@ -7,6 +7,8 @@ import sys
 from _thread import *
 
 from models import *
+import pyDes
+import binascii
 
 listenSocket: socket
 serverSocket: socket
@@ -35,6 +37,20 @@ def connectServer():
     print(f'Connected to server on {LOCALHOST}:{SERVER_PORT}')
     serverSocket.send(str.encode(f'sync {LOCALHOST} {sys.argv[1]}'))
     enterCommand()
+
+
+def encrypt(plaintext):
+    des = pyDes.triple_des('123456789123456789123456')
+    x = des.encrypt(plaintext, padmode=pyDes.PAD_PKCS5)
+    x = binascii.b2a_hex(x).decode(encoding='utf-8')
+    return x
+
+
+def decrypt(ciphertext):
+    des = pyDes.triple_des('123456789123456789123456')
+    x = binascii.a2b_hex(ciphertext)
+    x = des.decrypt(x, padmode=pyDes.PAD_PKCS5)
+    return str(x, 'utf-8')
 
 
 def enterCommand():
@@ -84,6 +100,14 @@ def enterCommand():
         elif cmdList[0] not in COMMAND_LIST:
             print('Unknown command')
             continue
+        print(cmd)
+        print(type(cmd))
+        if cmdList[0] == 'senduser' or cmdList[0] == 'sendgrp':
+            msg = ''
+            for i in range(3, len(cmdList)):
+                msg += cmdList[i]+' '
+            msg = encrypt(msg)
+            cmd = cmdList[0] + ' ' + cmdList[1] + ' ' + cmdList[2] + ' ' + msg
         serverSocket.send(str.encode(cmd))
         data = (serverSocket.recv(PIECE_SIZE))
         text = data.decode('utf-8')
@@ -96,7 +120,9 @@ def acceptMessage(conn, addr):
     conn.send(str.encode('OK'))  # sync mechanism
     if text == 'text':
         data = conn.recv(PIECE_SIZE)
-        print(data.decode('utf-8'))
+        data = data.decode('utf-8').split(' ')
+        print(data[0]+' '+data[1]+' ',end=' ')
+        print(decrypt(data[2]))
     else:
         text = text.split(' ')
         fName = text[2]
