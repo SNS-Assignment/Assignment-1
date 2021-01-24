@@ -19,6 +19,7 @@ isActive = True
 PRIVATE_KEY = ''
 PUBLIC_KEY = ''
 SECRETS = {}
+GROUP_NONCE = {}
 
 
 def startListen():
@@ -67,16 +68,20 @@ def enterCommand():
             if len(cmdList) < 3:
                 print('Too few parameters')
                 continue
+            if LOGIN_ID != '':
+                print('Already logged in')
+                continue
             sendCommand = 'login'
         elif cmdList[0] == 'join':
             if len(cmdList) < 2:
                 print('Too few parameters')
                 continue
+            sendCommand = 'join'
         elif cmdList[0] == 'create':
             if len(cmdList) < 2:
                 print('Too few parameters')
                 continue
-        # senduser <user_name> <text/file> <text body/file path>
+            sendCommand = 'create'
         elif cmdList[0] == 'senduser':
             if len(cmdList) < 4:
                 print('Too few parameters')
@@ -91,16 +96,20 @@ def enterCommand():
             if cmdList[2] != 'text' and cmdList[2] != 'file':
                 print('Incorrect format: '+cmdList[2])
                 continue
+            if cmdList[1] not in GROUP_NONCE:
+                print('Not a member of group/Invalid group')
+                continue
         elif cmdList[0] not in COMMAND_LIST:
             print('Unknown command')
             continue
         # print(cmd)
         # print(type(cmd))
-        if cmdList[0] == 'senduser' and cmdList[2] == 'text':  # or cmdList[0] == 'sendgrp'
+        if (cmdList[0] == 'senduser' or cmdList[0] == 'sendgrp') and cmdList[2] == 'text':
             msg = ''
             for i in range(3, len(cmdList)):
                 msg += cmdList[i]+' '
-            msg = TripleDES.encrypt(msg, SECRETS[cmdList[1]])
+            msg = TripleDES.encrypt(
+                msg, SECRETS[cmdList[1]] if cmdList[0] == 'senduser' else GROUP_NONCE[cmdList[1]])
             cmd = cmdList[0] + ' ' + cmdList[1] + ' ' + cmdList[2] + ' ' + msg
         serverSocket.send(str.encode(cmd))
         data = (serverSocket.recv(PIECE_SIZE))
@@ -114,13 +123,18 @@ def enterCommand():
             PRIVATE_KEY = (hashlib.sha256(
                 (uuid.uuid4().hex+roll).encode())).hexdigest()[-16:]
             PUBLIC_KEY = DiffieHelman.getPubKey(PRIVATE_KEY)
-            print(PUBLIC_KEY)
+            # print(PUBLIC_KEY)
             if len(text.split('\n')) > 1:
                 syncPublicKey(text.split('\n')[1:])
             # except Exception as e:
             #     print('Exception occured', e)
             #     break
-        text = text.split('\n')[0]
+        if (sendCommand == 'create' or sendCommand == 'join') and 'Creating' in text.split('\n')[0]:
+            svResponse = (text.split('\n')[2]).strip()
+            GROUP_NONCE[svResponse] = uuid.uuid4().hex[-16:]
+        if sendCommand == 'join' and 'Adding' in text.split('\n')[0]:
+            syncGroupNonce(text.split('\n')[1])
+        #text = text.split('\n')[0]
         print(f'Server response: {text}')
 
 
@@ -146,18 +160,35 @@ def syncPublicKey(ll: list):
     print(SECRETS)
 
 
+def syncGroupNonce(ll: str):
+    x = ll.split(' ')
+    grp = x[0]
+    ip = x[1]
+    port = int(x[2])
+    userSocket = socket.socket()
+    # try:
+    userSocket.connect((ip, port))
+    userSocket.send(str.encode(f'grpsync {grp}'))
+    data = (userSocket.recv(PIECE_SIZE))
+    text = data.decode('utf-8')
+    # print(text)
+    GROUP_NONCE[grp] = text
+    userSocket.close()
+
+
 def acceptMessage(conn, addr):
     data = conn.recv(PIECE_SIZE)
     text = data.decode('utf-8')
     params = text.split(' ')
-    if params[0] != 'pubsync':
+    if params[0].startswith('file') or params[0].startswith('text'):
         conn.send(str.encode('OK'))  # sync mechanism
-    if params[0] == 'text':
+    if params[0].startswith('text'):
         data = conn.recv(PIECE_SIZE)
         data = data.decode('utf-8').split(' ')
-        print(data[0]+' '+data[1]+' ', end=' ')
-        print(TripleDES.decrypt(data[2], SECRETS[data[0]]))
-    elif params[0] == 'file':
+        key = (GROUP_NONCE[data[4]] if params[0][-1] == 'g' else SECRETS[data[0]])
+        data[-1] = TripleDES.decrypt(data[6 if params[0][-1] == 'g' else 3], key)
+        print(' '.join(data))
+    elif params[0].startswith('file'):
         text = text.split(' ')
         fName = text[2]
         f = open(f'{datetime.datetime.now().time()}-{fName}', 'wb')
@@ -176,6 +207,9 @@ def acceptMessage(conn, addr):
         #print(f'{LOGIN_ID} {PUBLIC_KEY}')
         print(SECRETS)
         conn.send(str.encode(f'{LOGIN_ID} {PUBLIC_KEY}'))
+    elif params[0] == 'grpsync':
+        conn.send(str.encode(f'{GROUP_NONCE[params[1]]}'))
+        print(GROUP_NONCE)
 
 
 def main():
