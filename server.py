@@ -15,6 +15,7 @@ userDatabase = {}
 groups = {}
 connectedIPS = []
 connectedClients = {}
+publicKeys = {}
 
 
 def startListen():
@@ -45,7 +46,7 @@ def acceptMessage(conn, addr):
         params = text.split(' ')
         msgType = params[0]
         if msgType == 'signup':
-            user = User(params[1], params[2])
+            user = User(params[1], params[2], params[3])
             if params[1] in userDatabase:
                 msg = f'User {params[1]} already exists'
             else:
@@ -53,7 +54,7 @@ def acceptMessage(conn, addr):
                 userDatabase[params[1]] = user
             conn.send(str.encode(msg))
         elif msgType == 'login':
-            user = User(params[1], params[2])
+            #user = User(params[1], params[2])
             client = Client(params[1], str(addr[1]), int(addr[2]))
             if params[1] not in userDatabase:
                 msg = f'User {params[1]} is not registered'
@@ -62,10 +63,17 @@ def acceptMessage(conn, addr):
             elif params[2] != userDatabase[params[1]].password:
                 msg = 'Incorrect password'
             else:
-                msg = f'User {params[1]} logged in'
+                msg = f'User {params[1]} successfully logged in {userDatabase[params[1]].roll}'
+                for c in connectedClients:
+                    msg = f'{msg}\n{c} {connectedClients[c].ip} {connectedClients[c].port}'
                 loginId = params[1]
+                print(msg)
                 connectedClients[params[1]] = client
             conn.send(str.encode(msg))
+            # if loginId != '':
+            #     data = (conn.recv(PIECE_SIZE))
+            #     text = data.decode('utf-8')
+            #     print(f'Public key received from {loginId}: {text}')
         elif msgType == 'join':
             if params[1] not in groups:
                 msg = f'Creating group {params[1]}\nAdding {loginId} to group'
@@ -169,6 +177,7 @@ def main():
         listenSocket.bind((LOCALHOST, SERVER_PORT))
     except Exception as e:
         print('Bind Failed. Exception occured:', str(e))
+        quit()
     listenSocket.listen(4)  # max queued clients=4
     print('Listening on http://' + LOCALHOST + ':' + str(SERVER_PORT))
     start_new_thread(startListen, ())

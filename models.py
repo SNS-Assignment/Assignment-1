@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 
 class User:
-    def __init__(self, id: str, password: str):
+    def __init__(self, id: str, roll: int, password: str):
         self.id = id
+        self.roll = roll
         self.password = password
 
 
 class Client:
-    def __init__(self, userid: str, ip: str, port: int):
+    def __init__(self, userid: str, ip: str, port: int, pubkey=None):
         self.userid = id
         self.ip = ip
         self.port = port
+        self.pubkey = ('' if pubkey is None else pubkey)
 
 
 class Group:
