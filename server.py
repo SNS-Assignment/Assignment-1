@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 
 import copy
-import mimetypes
-import os
 import socket
 from _thread import *
-import uuid
 
 from models import *
 
@@ -15,7 +12,6 @@ userDatabase = {}
 groups = {}
 connectedIPS = []
 connectedClients = {}
-publicKeys = {}
 groupAdmin = {}
 
 
@@ -76,7 +72,7 @@ def acceptMessage(conn, addr):
                 msg = 'Cannot join groups unless logged in'
             elif params[1] not in groups:
                 msg = f'Creating group {params[1]}\nAdding {loginId} to group\n{params[1]}'
-                grp = Group(params[1], uuid.uuid4().hex)
+                grp = Group(params[1])
                 grp.addMember(loginId)
                 groupAdmin[params[1]] = loginId
                 groups[params[1]] = grp
@@ -106,7 +102,7 @@ def acceptMessage(conn, addr):
                 msg = 'Cannot create groups unless logged in'
             elif params[1] not in groups:
                 msg = f'Creating group {params[1]}\nAdding {loginId} to group\n{params[1]}'
-                grp = Group(params[1], uuid.uuid4().hex)
+                grp = Group(params[1])
                 grp.addMember(loginId)
                 groupAdmin[params[1]] = loginId
                 groups[params[1]] = grp
@@ -156,7 +152,6 @@ def sendToUser(params, loginId, isGrp=False, grpId=''):
         s.send(str.encode('text' + ('g' if isGrp else '')))
         s.recv(PIECE_SIZE)
         try:
-            # s.close()
             t = ' '.join(params[3:])
             gg = f'{loginId} sent to group {grpId} message {t}'
             uu = f'{loginId} sent message {t}'
@@ -167,17 +162,20 @@ def sendToUser(params, loginId, isGrp=False, grpId=''):
             msg = f'Failed to send message to user {params[1]}'
         return msg
     elif params[2] == 'file':
-        filename = params[3].split('/')
-        filename = filename[-1]
+        filename = params[3] #.split('/')
+        #filename = filename[-1]
         var = 'file' + ('g' if isGrp else '')
-        s.send(str.encode(f'{var} {loginId} {filename}'))
+        s.send(str.encode(f'{var} {loginId} {connectedClients[loginId].ip} {connectedClients[loginId].port} {filename}'))
         s.recv(PIECE_SIZE)
         try:
-            with open(params[3], 'rb') as f:
-                packet = f.read(PIECE_SIZE)
-                while len(packet) != 0:
-                    s.send(packet)
-                    packet = f.read(PIECE_SIZE)
+            # with open(params[3], 'rb') as f:
+            #     packet = f.read(PIECE_SIZE)
+            #     while len(packet) != 0:
+            #         s.send(packet)
+            #         packet = f.read(PIECE_SIZE)
+            gg = f'{loginId} sent to group {grpId} file {filename}'
+            uu = f'{loginId} sent file {filename}'
+            s.send(str.encode(gg if isGrp else uu))
             msg = f'Message sent to user {params[1]}'
         except Exception as e:
             print('Exception occured:', str(e))

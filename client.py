@@ -89,6 +89,9 @@ def enterCommand():
             if cmdList[2] != 'text' and cmdList[2] != 'file':
                 print('Incorrect format: '+cmdList[2])
                 continue
+            if cmdList[2] == 'file' and not os.path.exists(cmdList[3]):
+                print('Incorrect path/file not found:', cmdList[3])
+                continue
         elif cmdList[0] == 'sendgrp':
             if len(cmdList) < 4:
                 print('Too few parameters')
@@ -99,18 +102,27 @@ def enterCommand():
             if cmdList[1] not in GROUP_NONCE:
                 print('Not a member of group/Invalid group')
                 continue
+            if cmdList[2] == 'file' and not os.path.exists(cmdList[3]):
+                print('Incorrect path/file not found:', cmdList[3])
+                continue
         elif cmdList[0] not in COMMAND_LIST:
             print('Unknown command')
             continue
         # print(cmd)
         # print(type(cmd))
-        if (cmdList[0] == 'senduser' or cmdList[0] == 'sendgrp') and cmdList[2] == 'text':
-            msg = ''
-            for i in range(3, len(cmdList)):
-                msg += cmdList[i]+' '
-            msg = TripleDES.encrypt(
-                msg, SECRETS[cmdList[1]] if cmdList[0] == 'senduser' else GROUP_NONCE[cmdList[1]])
-            cmd = cmdList[0] + ' ' + cmdList[1] + ' ' + cmdList[2] + ' ' + msg
+        if (cmdList[0] == 'senduser' or cmdList[0] == 'sendgrp'):
+            if cmdList[2] == 'text':
+                msg = ''
+                for i in range(3, len(cmdList)):
+                    msg += cmdList[i]+' '
+                msg = TripleDES.encrypt(
+                    msg, SECRETS[cmdList[1]] if cmdList[0] == 'senduser' else GROUP_NONCE[cmdList[1]])
+                cmd = cmdList[0] + ' ' + cmdList[1] + \
+                    ' ' + cmdList[2] + ' ' + msg
+            elif cmdList[2] == 'file':
+                cmdList[3] = TripleDES.encrypt(
+                    cmdList[3], SECRETS[cmdList[1]] if cmdList[0] == 'senduser' else GROUP_NONCE[cmdList[1]])
+                cmd = ' '.join(cmdList)
         serverSocket.send(str.encode(cmd))
         data = (serverSocket.recv(PIECE_SIZE))
         text = data.decode('utf-8')
@@ -157,7 +169,7 @@ def syncPublicKey(ll: list):
         # except Exception as e:
         #     print('Exception occured:', str(e))
 
-    print(SECRETS)
+    #print(SECRETS)
 
 
 def syncGroupNonce(ll: str):
@@ -185,23 +197,45 @@ def acceptMessage(conn, addr):
     if params[0].startswith('text'):
         data = conn.recv(PIECE_SIZE)
         data = data.decode('utf-8').split(' ')
-        key = (GROUP_NONCE[data[4]] if params[0][-1] == 'g' else SECRETS[data[0]])
-        data[-1] = TripleDES.decrypt(data[6 if params[0][-1] == 'g' else 3], key)
+        key = (GROUP_NONCE[data[4]] if params[0]
+               [-1] == 'g' else SECRETS[data[0]])
+        data[-1] = TripleDES.decrypt(data[6 if params[0]
+                                          [-1] == 'g' else 3], key)
         print(' '.join(data))
     elif params[0].startswith('file'):
-        text = text.split(' ')
-        fName = text[2]
+        ip = params[2]
+        port = int(params[3])
+        data = conn.recv(PIECE_SIZE)
+        data = data.decode('utf-8').split(' ')
+        key = (GROUP_NONCE[data[4]] if params[0]
+               [-1] == 'g' else SECRETS[data[0]])
+        data[-1] = TripleDES.decrypt(data[6 if params[0]
+                                          [-1] == 'g' else 3], key)
+        fName = (data[-1].split('/'))[-1]
+        print(' '.join(data))
+        #try:
         f = open(f'{datetime.datetime.now().time()}-{fName}', 'wb')
+        fds = socket.socket()
+        fds.connect((ip, port))
+        if params[0][-1] == 'g':
+            fds.send(str.encode(f'dlfile g {data[4]} {data[-1]}'))
+        else:
+            fds.send(str.encode(f'dlfile u {LOGIN_ID} {data[-1]}'))
         while True:
-            data = conn.recv(PIECE_SIZE)
+            data = fds.recv(PIECE_SIZE+8)
+            data = TripleDES.decrypt(data, key, isFile=True)
             while len(data) != 0:
                 f.write(data)
                 if len(data) < PIECE_SIZE:
                     break
-                data = conn.recv(PIECE_SIZE)
+                data = fds.recv(PIECE_SIZE+8)
+                data = TripleDES.decrypt(data, key, isFile=True)
             f.close()
             break
-        print(f'{text[1]} sent file {fName}')
+        print(f'Downloaded file {fName}')
+        fds.close()
+        # except Exception as e:
+        #     print('Exception occured:', str(e))
     elif params[0] == 'pubsync':
         SECRETS[params[1]] = DiffieHelman.getSecret(params[2], PRIVATE_KEY)
         #print(f'{LOGIN_ID} {PUBLIC_KEY}')
@@ -209,7 +243,20 @@ def acceptMessage(conn, addr):
         conn.send(str.encode(f'{LOGIN_ID} {PUBLIC_KEY}'))
     elif params[0] == 'grpsync':
         conn.send(str.encode(f'{GROUP_NONCE[params[1]]}'))
-        print(GROUP_NONCE)
+        #print(GROUP_NONCE)
+    elif params[0] == 'dlfile':
+        dckey = ''
+        print('Uploading file',params[3])
+        if params[1] == 'u':
+            dckey = SECRETS[params[2]]
+        else:
+            dckey = GROUP_NONCE[params[2]]
+        with open(params[3], 'rb') as f:
+            packet = f.read(PIECE_SIZE)
+            while len(packet) != 0:
+                packet = TripleDES.encrypt(packet, dckey, isFile=True)
+                conn.send(packet)
+                packet = f.read(PIECE_SIZE)
 
 
 def main():
@@ -225,6 +272,7 @@ def main():
         listenSocket.bind((LOCALHOST, int(sys.argv[1])))
     except Exception as e:
         print('Bind Failed. Exception occured:', str(e))
+        return
     listenSocket.listen(4)  # max queued clients=4
     print('Listening on http://' + LOCALHOST + ':' + sys.argv[1])
     start_new_thread(startListen, ())
