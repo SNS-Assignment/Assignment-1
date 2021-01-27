@@ -190,11 +190,11 @@ def syncGroupNonce(ll: str):
 
 def unique_filename(output_filename, file_extension):
     n = ''
-    while os.path.exists(f'{n}{output_filename}{file_extension}'):
+    while os.path.exists(f'{output_filename}{n}{file_extension}'):
         if isinstance(n, str):
             n = -1
         n += 1
-    return f'{n}{output_filename}{file_extension}'
+    return f'{output_filename}{n}{file_extension}'
 
 def acceptMessage(conn, addr):
     data = conn.recv(PIECE_SIZE)
