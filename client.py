@@ -169,7 +169,7 @@ def syncPublicKey(ll: list):
         # except Exception as e:
         #     print('Exception occured:', str(e))
 
-    #print(SECRETS)
+    # print(SECRETS)
 
 
 def syncGroupNonce(ll: str):
@@ -196,6 +196,7 @@ def unique_filename(output_filename, file_extension):
         n += 1
     return f'{output_filename}{n}{file_extension}'
 
+
 def acceptMessage(conn, addr):
     data = conn.recv(PIECE_SIZE)
     text = data.decode('utf-8')
@@ -221,9 +222,9 @@ def acceptMessage(conn, addr):
                                           [-1] == 'g' else 3], key)
         fName = (data[-1].split('/'))[-1]
         print(' '.join(data))
-        #try:
-        filename,file_ext = os.path.split(fName)
-        fName = unique_filename(str(filename),str(file_ext))
+        # try:
+        filename, file_ext = os.path.split(fName)
+        fName = unique_filename(str(filename), str(file_ext))
 
         f = open(fName, 'wb')
         fds = socket.socket()
@@ -254,10 +255,10 @@ def acceptMessage(conn, addr):
         conn.send(str.encode(f'{LOGIN_ID} {PUBLIC_KEY}'))
     elif params[0] == 'grpsync':
         conn.send(str.encode(f'{GROUP_NONCE[params[1]]}'))
-        #print(GROUP_NONCE)
+        # print(GROUP_NONCE)
     elif params[0] == 'dlfile':
         dckey = ''
-        print('Uploading file',params[3])
+        print('Uploading file', params[3])
         if params[1] == 'u':
             dckey = SECRETS[params[2]]
         else:
