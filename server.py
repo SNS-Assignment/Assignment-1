@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 
 import copy
-import mimetypes
-import os
 import socket
 from _thread import *
-import uuid
 
 from models import *
 
@@ -15,6 +12,7 @@ userDatabase = {}
 groups = {}
 connectedIPS = []
 connectedClients = {}
+groupAdmin = {}
 
 
 def startListen():
@@ -45,7 +43,7 @@ def acceptMessage(conn, addr):
         params = text.split(' ')
         msgType = params[0]
         if msgType == 'signup':
-            user = User(params[1], params[2])
+            user = User(params[1], params[2], params[3])
             if params[1] in userDatabase:
                 msg = f'User {params[1]} already exists'
             else:
@@ -53,7 +51,7 @@ def acceptMessage(conn, addr):
                 userDatabase[params[1]] = user
             conn.send(str.encode(msg))
         elif msgType == 'login':
-            user = User(params[1], params[2])
+            #user = User(params[1], params[2])
             client = Client(params[1], str(addr[1]), int(addr[2]))
             if params[1] not in userDatabase:
                 msg = f'User {params[1]} is not registered'
@@ -62,15 +60,21 @@ def acceptMessage(conn, addr):
             elif params[2] != userDatabase[params[1]].password:
                 msg = 'Incorrect password'
             else:
-                msg = f'User {params[1]} logged in'
+                msg = f'User {params[1]} successfully logged in {userDatabase[params[1]].roll}'
+                for c in connectedClients:
+                    msg = f'{msg}\n{c} {connectedClients[c].ip} {connectedClients[c].port}'
                 loginId = params[1]
+                # print(msg)
                 connectedClients[params[1]] = client
             conn.send(str.encode(msg))
         elif msgType == 'join':
-            if params[1] not in groups:
-                msg = f'Creating group {params[1]}\nAdding {loginId} to group'
-                grp = Group(params[1], uuid.uuid4().hex)
+            if loginId == '':
+                msg = 'Cannot join groups unless logged in'
+            elif params[1] not in groups:
+                msg = f'Creating group {params[1]}\nAdding {loginId} to group\n{params[1]}'
+                grp = Group(params[1])
                 grp.addMember(loginId)
+                groupAdmin[params[1]] = loginId
                 groups[params[1]] = grp
             else:
                 msg = f'Adding {loginId} to group'
@@ -80,6 +84,8 @@ def acceptMessage(conn, addr):
                 else:
                     grp.addMember(loginId)
                     groups[params[1]] = grp
+                    c = groupAdmin[params[1]]
+                    msg = f'{msg}\n{params[1]} {connectedClients[c].ip} {connectedClients[c].port}'
             conn.send(str.encode(msg))
         elif msgType == 'list':
             msg = ''
@@ -88,17 +94,25 @@ def acceptMessage(conn, addr):
                     f'\nName: {grp} Participants: {len(groups[grp].members)}'
             # grpList = str(groups.keys())
             # msg = str(grpList)
+            if msg == '':
+                msg = 'No groups exist'
             conn.send(str.encode(msg))
         elif msgType == 'create':
-            if params[1] not in groups:
-                msg = f'Creating group {params[1]}'
-                grp = Group(params[1], uuid.uuid4().hex)
+            if loginId == '':
+                msg = 'Cannot create groups unless logged in'
+            elif params[1] not in groups:
+                msg = f'Creating group {params[1]}\nAdding {loginId} to group\n{params[1]}'
+                grp = Group(params[1])
+                grp.addMember(loginId)
+                groupAdmin[params[1]] = loginId
                 groups[params[1]] = grp
             else:
                 msg = f'Group {params[1]} already exists'
             conn.send(str.encode(msg))
         elif msgType == 'senduser':
-            if params[1] not in userDatabase:
+            if loginId == '':
+                msg = 'Cannot send messages unless logged in'
+            elif params[1] not in userDatabase:
                 msg = f'User {params[1]} is not registered'
             elif params[1] not in connectedClients:
                 msg = f'User {params[1]} is offline/not logged in'
@@ -106,15 +120,18 @@ def acceptMessage(conn, addr):
                 msg = sendToUser(params, loginId)
             conn.send(str.encode(msg))
         elif msgType == 'sendgrp':
-            if params[1] not in groups:
+            if loginId == '':
+                msg = 'Cannot send messages unless logged in'
+            elif params[1] not in groups:
                 msg = f'Group {params[1]} does not exist'
-                conn.send(str.encode(msg))
+            elif loginId not in groups[params[1]].members:
+                msg = f'Not a member of {params[1]}'
             else:
                 for u in groups[params[1]].members:
                     t = copy.deepcopy(params)
                     t[1] = u
-                    msg = sendToUser(t, loginId)
-                    conn.send(str.encode(msg))
+                    msg = sendToUser(t, loginId, isGrp=True, grpId=params[1])
+            conn.send(str.encode(msg))
         elif msgType == 'quit':
             msg = f'{addr[1]}:{addr[2]} ({loginId}) logged out'
             connectedClients.pop(loginId, 'User not entered')
@@ -127,34 +144,38 @@ def acceptMessage(conn, addr):
             conn.send(str.encode(msg))
 
 
-def sendToUser(params, loginId):
-
+def sendToUser(params, loginId, isGrp=False, grpId=''):
     s = socket.socket()
     client = connectedClients[params[1]]
     s.connect((client.ip, client.port))
     if params[2] == 'text':
-        s.send(str.encode('text'))
+        s.send(str.encode('text' + ('g' if isGrp else '')))
         s.recv(PIECE_SIZE)
         try:
-            # s.close()
             t = ' '.join(params[3:])
-            s.send(str.encode(f'{loginId} sent {t}'))
+            gg = f'{loginId} sent to group {grpId} message {t}'
+            uu = f'{loginId} sent message {t}'
+            s.send(str.encode(gg if isGrp else uu))
             msg = f'Message sent to user {params[1]}'
         except Exception as e:
             print('Exception occured:', str(e))
             msg = f'Failed to send message to user {params[1]}'
         return msg
     elif params[2] == 'file':
-        filename = params[3].split('/')
-        filename = filename[-1]
-        s.send(str.encode(f'file {loginId} {filename}'))
+        filename = params[3] #.split('/')
+        #filename = filename[-1]
+        var = 'file' + ('g' if isGrp else '')
+        s.send(str.encode(f'{var} {loginId} {connectedClients[loginId].ip} {connectedClients[loginId].port} {filename}'))
         s.recv(PIECE_SIZE)
         try:
-            with open(params[3], 'rb') as f:
-                packet = f.read(PIECE_SIZE)
-                while len(packet) != 0:
-                    s.send(packet)
-                    packet = f.read(PIECE_SIZE)
+            # with open(params[3], 'rb') as f:
+            #     packet = f.read(PIECE_SIZE)
+            #     while len(packet) != 0:
+            #         s.send(packet)
+            #         packet = f.read(PIECE_SIZE)
+            gg = f'{loginId} sent to group {grpId} file {filename}'
+            uu = f'{loginId} sent file {filename}'
+            s.send(str.encode(gg if isGrp else uu))
             msg = f'Message sent to user {params[1]}'
         except Exception as e:
             print('Exception occured:', str(e))
@@ -169,6 +190,7 @@ def main():
         listenSocket.bind((LOCALHOST, SERVER_PORT))
     except Exception as e:
         print('Bind Failed. Exception occured:', str(e))
+        quit()
     listenSocket.listen(4)  # max queued clients=4
     print('Listening on http://' + LOCALHOST + ':' + str(SERVER_PORT))
     start_new_thread(startListen, ())
